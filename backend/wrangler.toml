@@ -1,0 +1,12 @@
+name = "storyboard-app"
+compatibility_date = "2023-02-11"
+main = "src/index.ts"
+
+[[ d1_databases ]]
+binding = "DB" # i.e. available in your Worker on env.DB
+database_name = "storyboard-app-db"
+database_id = "51054508-de43-4221-8f2a-7d020d126e5e"
+
+# The necessary secrets are:
+# - API_KEY
+# Run `echo <VALUE> | wrangler secret put <NAME>` for each of these
