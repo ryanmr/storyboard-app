@@ -51,7 +51,9 @@ app.get("/", async (c) => {
 app.get("/api/posts", async (c) => {
   console.log("GET posts");
 
-  const { results } = await c.env.DB.prepare(`select * from posts`)
+  const { results } = await c.env.DB.prepare(
+    `select * from posts where hidden = 0`
+  )
     .bind()
     .all();
 
@@ -70,7 +72,9 @@ app.get("/api/posts/:id", async (c) => {
 
   const { id } = c.req.param();
 
-  const { results } = await c.env.DB.prepare(`select * from posts where id = ?`)
+  const { results } = await c.env.DB.prepare(
+    `select * from posts where id = ? and hidden = 0`
+  )
     .bind(id)
     .all();
 
@@ -163,7 +167,7 @@ app.put("/api/posts/:id", async (c) => {
   // we could also detect author_code here
   // and return 404 or forbidden
   const dbSelectResult = await c.env.DB.prepare(
-    `select * from posts where id = ?`
+    `select * from posts where id = ? and hidden = 0`
   )
     .bind(id)
     .all();
