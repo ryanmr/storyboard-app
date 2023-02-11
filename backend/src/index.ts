@@ -3,6 +3,10 @@ import { cors } from "hono/cors";
 
 import { z } from "zod";
 
+export interface Env {
+  DB: D1Database;
+}
+
 const NewPostSchema = z.object({
   author: z.string().min(3).max(60),
   author_code: z.string().length(64),
