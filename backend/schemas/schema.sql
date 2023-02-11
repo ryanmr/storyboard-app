@@ -1,3 +1,11 @@
+drop table if exists topics;
+create table if not exists topics (
+    id integer primary key autoincrement,
+    title text not null,
+    created_at text not null,
+    hidden integer default 0
+);
+
 drop table if exists posts;
 create table if not exists posts (
     id integer primary key autoincrement,
@@ -6,5 +14,9 @@ create table if not exists posts (
     title text not null,
     body text not null,
     created_at text not null,
-    hidden integer default 0
+    updated_at text,
+    topic_id integer,
+    hidden integer default 0,
+    FOREIGN KEY(topic_id) REFERENCES topics(id)
 );
+
