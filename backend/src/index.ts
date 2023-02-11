@@ -3,15 +3,12 @@ import { cors } from "hono/cors";
 
 import { z } from "zod";
 
-export interface Env {
-  DB: D1Database;
-}
-
 const NewPostSchema = z.object({
   author: z.string().min(3).max(60),
   author_code: z.string().length(64),
   title: z.string().min(3).max(60),
   body: z.string().min(3).max(2000),
+  topic_id: z.number(),
 });
 
 type NewPost = z.infer<typeof NewPostSchema>;
@@ -31,10 +28,30 @@ type Post = {
   author_code: string;
   title: string;
   body: string;
+  topic_id: number;
   created_at: string;
 };
 
-const app = new Hono();
+/**
+ * Bindings.
+ */
+interface Bindings {
+  /**
+   * Cloudflare D1 sqlite database.
+   */
+  DB: D1Database;
+
+  /**
+   * API KEY. Set via Cloudflare secrets.
+   */
+  API_KEY: string;
+}
+
+interface HonoConfig {
+  Bindings: Bindings;
+}
+
+const app = new Hono<HonoConfig>();
 
 app.use("/api/*", cors());
 
@@ -117,14 +134,15 @@ app.post("/api/posts", async (c) => {
 
   const dbResult = await c.env.DB.prepare(
     `
-  insert into posts (author, author_code, title, body, created_at)
-  values (?, ?, ?, ?, ?)`
+  insert into posts (author, author_code, title, body, topic_id, created_at)
+  values (?, ?, ?, ?, ?, ?)`
   )
     .bind(
       newPost.author,
       newPost.author_code,
       newPost.title,
       newPost.body,
+      newPost.topic_id,
       new Date().toISOString()
     )
     .run();
@@ -157,6 +175,8 @@ app.put("/api/posts/:id", async (c) => {
   >();
 
   // honeypot; slightest bit of extra security
+  // todo: we could move this to next
+  // if we run api requests through its api backend
   if (possibleUpdatePost.email) {
     c.status(404);
     return c.json({ message: "not found", error: true });
@@ -205,6 +225,91 @@ app.put("/api/posts/:id", async (c) => {
   if (dbUpdateResult.success) {
     c.status(202);
     return c.json({ message: "post updated" });
+  } else {
+    c.status(500);
+    return c.json({ message: "something went wrong", error: true });
+  }
+});
+
+const NewTopicSchema = z.object({
+  title: z.string().min(3).max(100),
+});
+
+type NewTopic = z.infer<typeof NewTopicSchema>;
+
+type Topic = { id: number; title: string; created_at: string };
+
+/**
+ * Get topics.
+ */
+app.get("/api/topics", async (c) => {
+  console.log("GET topics");
+
+  const { results } = await c.env.DB.prepare(
+    `select * from topics where hidden = 0`
+  )
+    .bind()
+    .all();
+
+  const topics = results as Topic[];
+
+  return c.json(topics);
+});
+
+/**
+ * Get posts by topic.
+ */
+app.get("/api/topics/:id/posts", async (c) => {
+  console.log("GET posts by topic id");
+
+  const { id } = c.req.param();
+
+  // todo: should check for topic hidden = 0 as well
+  const { results } = await c.env.DB.prepare(
+    `select * from posts where hidden = 0 and topic_id = ?`
+  )
+    .bind(id)
+    .all();
+
+  const posts = results as Post[];
+
+  const sanitized = posts.map(({ author_code: _, ...rest }) => rest);
+
+  return c.json(sanitized);
+});
+
+/**
+ * Post topic.
+ */
+app.post("/api/topics", async (c) => {
+  console.log("POST topic");
+
+  const possibleNewTopic = await c.req.json<
+    Partial<NewTopic & { email: string }>
+  >();
+
+  const validationResult = NewTopicSchema.safeParse(possibleNewTopic);
+
+  if (!validationResult.success) {
+    c.status(400);
+    return c.json(validationResult.error.errors);
+  }
+
+  const newTopic = validationResult.data;
+
+  const dbResult = await c.env.DB.prepare(
+    `
+  insert into topics (title, created_at)
+  values (?, ?)`
+  )
+    .bind(newTopic.title, new Date().toISOString())
+    .run();
+
+  console.log("new topic saved", dbResult.success);
+
+  if (dbResult.success) {
+    c.status(201);
+    return c.json({ message: "topic saved" });
   } else {
     c.status(500);
     return c.json({ message: "something went wrong", error: true });
